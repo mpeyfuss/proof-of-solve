@@ -5,7 +5,6 @@ pragma solidity ^0.8.28;
 /// @notice Interface for optional post-solve side effects triggered by `ProofOfSolve`.
 /// @dev Implementations must treat `data` as untrusted user input and enforce their
 ///      own authorization, replay protection, and input validation as needed.
-/// @author mpeyfuss
 interface IPostProofHook {
     /// @notice Handles side effects after a solver has been marked as solved.
     /// @dev The caller is expected to be a `ProofOfSolve` instance, but hooks should
