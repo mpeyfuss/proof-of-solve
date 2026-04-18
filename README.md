@@ -404,3 +404,5 @@ This repository is provided as-is, without warranty of any kind. Use at your own
 
 ## License
 This repository is licensed under the MIT License. See [LICENSE](/Users/mpeyfuss/MP/proof-of-solve/LICENSE).
+
+## QED
