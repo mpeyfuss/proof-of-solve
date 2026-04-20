@@ -1,6 +1,6 @@
 # Proof Of Solve
 
-`ProofOfSolve` is a small verification contract for puzzle-style or challenge-style systems that record when an address has successfully solved something. This was originally concepted by Scott Kominers' [CROSSHASHES](https://etherscan.io/address/0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347f) project and expanded upon in this repository. Credit to [Selkie](https://x.com/madam_selkie) for the name `Proof of Solve`.
+`ProofOfSolve` is a verification protocol for recording when a user (as represented by an address) has successfully solved a puzzle-style challenge. This was originally concepted in [Scott Duke Kominers](https://scottkom.com/)'s [CROSSHASHES](https://etherscan.io/address/0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347f) project and expanded upon in this repository. Credit to [Selkie](https://x.com/madam_selkie) for the name `Proof of Solve`.
 
 The repo contains one primary contract, one hook interface, and a test suite around the expected behaviors:
 
@@ -8,7 +8,8 @@ The repo contains one primary contract, one hook interface, and a test suite aro
 - `src/IPostProofHook.sol`
 - `test/ProofOfSolve.t.sol`
 
-The original impetus for the contract was puzzle systems where the solution itself reveals a seed phrase or other secret that only a real solver should be able to obtain. In that mode, the signer is not really being trusted to judge correctness. The signer can safely sign for anyone who demonstrates knowledge of the secret, and the secret is the actual proof of solve.
+The original impetus for the contract was systems a puzzle solution comprises or reveals a secret that only a real solver should be able to obtain. In that mode, knowing the secret automatically implies correctness of the solution, and so the signer can safely sign for anyone who demonstrates knowledge of the secret---the secret itself is the actual proof of solve. This framework applies, to the following example use case:
+> A cryptic puzzle is shared with prospective solvers. The secret is the answer to the puzzle, which itself is a word or phrase. When a user solves the puzzle, they learn the answer, which comprises the secret; they can then activate the `ProofOfSolve` signer.
 
 The same contract shape also generalizes into a broader trusted-signer system. In that mode, the contract does not verify puzzle solutions onchain. Instead, it verifies that a configured signer approved a specific solver and a specific payload for a specific contract on a specific chain, then increments that solver's recorded solve count.
 
@@ -19,7 +20,7 @@ The contract system has two moving parts:
 1. `ProofOfSolve`
 2. An optional `IPostProofHook` implementation
 
-`ProofOfSolve` is the canonical state holder. It decides whether a caller can be marked as solved. A signer authorizes solve payloads. In the original seed-phrase use case, the signer is just attesting that the caller revealed the secret. In the broader generalized version, the signer can also act as a trusted offchain judge of whether some solve is valid. If a solve succeeds, the contract can optionally call a hook to trigger follow-up behavior such as minting, accounting, role assignment, or custom application logic.
+`ProofOfSolve` is the canonical state holder. It decides whether a caller can be marked as solved. A signer authorizes solve payloads. In the original puzzle answer use case, the signer is just attesting that the caller revealed the secret. In the broader generalized version, the signer can also act as a trusted offchain judge of whether some solve is valid. If a solve succeeds, the contract can optionally call a hook to trigger follow-up behavior such as minting, accounting, role assignment, or custom application logic.
 
 That split is the main design choice:
 
@@ -434,3 +435,5 @@ This repository is provided as-is, without warranty of any kind. Use at your own
 
 ## License
 This repository is licensed under the MIT License. See [LICENSE](/Users/mpeyfuss/MP/proof-of-solve/LICENSE).
+
+## QED
