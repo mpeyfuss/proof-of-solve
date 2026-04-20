@@ -27,15 +27,15 @@ contract ProofOfSolveTest is Test {
     function setUp() public {
         (signer, signerPrivateKey) = makeAddrAndKey("signer");
 
-        pf = new ProofOfSolve("test", owner, signer, address(0));
+        pf = new ProofOfSolve("test", 1, owner, signer, address(0));
     }
 
     function test_constructor_errors() public {
         vm.expectRevert(ProofOfSolve.InvalidAddress.selector);
-        pf = new ProofOfSolve("test", owner, address(0), address(0));
+        pf = new ProofOfSolve("test", 0, owner, address(0), address(0));
 
         vm.expectRevert(ProofOfSolve.InvalidAddress.selector);
-        pf = new ProofOfSolve("test", owner, signer, signer);
+        pf = new ProofOfSolve("test", 0, owner, signer, signer);
     }
 
     function test_constructor(address o, address s, address h) public {
@@ -53,9 +53,10 @@ contract ProofOfSolveTest is Test {
             emit ProofOfSolve.PostProofHookSet(h);
         }
 
-        pf = new ProofOfSolve("test", o, s, h);
+        pf = new ProofOfSolve("test", 10, o, s, h);
 
         assertEq(pf.owner(), o);
+        assertEq(pf.solveLimit(), 10);
         assertEq(pf.solutionSigner(), s);
         assertEq(pf.postProofHook(), h);
     }
@@ -176,17 +177,31 @@ contract ProofOfSolveTest is Test {
 
         // solve
         signature = _sign(solver, data, address(pf), block.chainid, signerPrivateKey);
-        vm.expectEmit(true, false, false, false);
-        emit ProofOfSolve.Solved(solver);
+        vm.expectEmit(true, true, false, false);
+        emit ProofOfSolve.Solved(solver, 1);
         vm.prank(solver);
         pf.solve(data, signature);
 
-        assertTrue(pf.solvers(solver));
+        assertEq(pf.solverCounts(solver), 1);
 
         // try solving again
         vm.expectRevert(ProofOfSolve.NotAllowed.selector);
         vm.prank(solver);
         pf.solve(data, signature);
+    }
+
+    function test_solveWithUnlimitedSolves(address solver, bytes memory data, uint8 num) public {
+        vm.assume(solver != address(0));
+        pf = new ProofOfSolve("test", 0, owner, signer, address(0));
+
+        for (uint256 i = 0; i < num; ++i) {
+            bytes memory signature = _sign(solver, data, address(pf), block.chainid, signerPrivateKey);
+            vm.expectEmit(true, true, false, false);
+            emit ProofOfSolve.Solved(solver, uint16(i + 1));
+            vm.prank(solver);
+            pf.solve(data, signature);
+            assertEq(pf.solverCounts(solver), i + 1);
+        }
     }
 
     function test_solveWithHook(address solver, bytes memory data) public {
@@ -201,8 +216,8 @@ contract ProofOfSolveTest is Test {
         bytes memory signature = _sign(solver, data, address(pf), block.chainid, signerPrivateKey);
         vm.expectEmit(true, false, false, true);
         emit Hook.ReceivedHook(solver, data);
-        vm.expectEmit(true, false, false, false);
-        emit ProofOfSolve.Solved(solver);
+        vm.expectEmit(true, true, false, false);
+        emit ProofOfSolve.Solved(solver, 1);
         vm.prank(solver);
         pf.solve(data, signature);
     }

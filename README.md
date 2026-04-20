@@ -10,7 +10,7 @@ The repo contains one primary contract, one hook interface, and a test suite aro
 
 The original impetus for the contract was puzzle systems where the solution itself reveals a seed phrase or other secret that only a real solver should be able to obtain. In that mode, the signer is not really being trusted to judge correctness. The signer can safely sign for anyone who demonstrates knowledge of the secret, and the secret is the actual proof of solve.
 
-The same contract shape also generalizes into a broader trusted-signer system. In that mode, the contract does not verify puzzle solutions onchain. Instead, it verifies that a configured signer approved a specific solver and a specific payload for a specific contract on a specific chain, then permanently marks that solver as solved.
+The same contract shape also generalizes into a broader trusted-signer system. In that mode, the contract does not verify puzzle solutions onchain. Instead, it verifies that a configured signer approved a specific solver and a specific payload for a specific contract on a specific chain, then increments that solver's recorded solve count.
 
 ## Contract System Overview
 
@@ -26,7 +26,7 @@ That split is the main design choice:
 - the contract only verifies signer authorization, not puzzle semantics
 - the actual proof of solve can either be a revealed secret or an operator decision
 - authorization to record that solution happens via ECDSA signature
-- durable onchain state is only "has this address solved?"
+- durable onchain state is "how many times has this address solved?"
 - post-solve side effects are modularized behind a hook
 
 This keeps the base contract simple and makes it usable across very different challenge systems.
@@ -40,38 +40,69 @@ The normal lifecycle looks like this:
 3. The signer either verifies the revealed secret or decides offchain that the solve is valid, then signs a payload for that exact user and that exact `data` blob.
 4. The user calls `solve(data, signature)`.
 5. The contract reconstructs the signed message and verifies the signer.
-6. If the signature is valid and the user has not solved before, the contract records `solvers[msg.sender] = true`.
+6. If the signature is valid and the caller is still below the configured per-address limit, the contract increments `solverCounts[msg.sender]`.
 7. If a hook is configured, the contract calls `hook(msg.sender, data)`.
-8. The contract emits `Solved(msg.sender)`.
+8. The contract emits `Solved(msg.sender, count)`.
 
 The important consequence is that the user does not submit a proof that the contract understands semantically. The contract only checks whether the configured signer authorized the submission. Whether that signer is acting as a mere witness to a revealed secret or as a trusted arbiter depends on the application.
+
+## Solve Counts
+
+`ProofOfSolve` tracks solves with a per-address counter:
+
+- `solverCounts[address]` stores how many successful solves that address has recorded
+- `solveLimit` is the maximum number of successful solves each address can accumulate
+- `solveLimit == 0` means "no explicit admin-configured cap"
+
+The limit check happens before incrementing:
+
+```solidity
+if (solveLimit != 0 && solverCounts[msg.sender] == solveLimit) revert NotAllowed();
+uint16 count = ++solverCounts[msg.sender];
+```
+
+That means:
+
+- if `solveLimit == 1`, the contract behaves like the old one-time-attestation model
+- if `solveLimit == N`, each address can solve successfully `N` times
+- each successful call emits the new cumulative count in `Solved(solver, count)`
+
+One implementation detail matters for integrators: both `solveLimit` and `solverCounts` are `uint16`.
+
+- the largest representable count is `65,535`
+- when `solveLimit` is nonzero, that type choice is usually fine because the configured cap is also `uint16`
+- when `solveLimit == 0`, the contract is still not truly unbounded; a single address can only reach `65535` successful solves before the next increment would overflow and revert
+
+So "unlimited" here should be read as "no configurable limit lower than the type ceiling," not mathematically infinite solves.
 
 ## `ProofOfSolve`
 
 ### State
 
-The main contract stores five pieces of state:
+The main contract stores six pieces of state:
 
 - `name`: the human-readable identifier of the puzzle/game
+- `solveLimit`: the configured per-address solve cap, where `0` means no explicit cap
 - `solutionSigner`: the address allowed to authorize solves
 - `signerLocked`: whether signer rotation has been permanently disabled
 - `postProofHook`: an optional contract called after a successful solve
-- `solvers[address]`: whether an address has already solved
+- `solverCounts[address]`: how many successful solves an address has recorded
 
 The state machine is deliberately simple:
 
-- an address starts as unsolved
-- a valid call to `solve` marks it solved
+- an address starts at `solverCounts[address] == 0`
+- a valid call to `solve` increments the count by `1`
 - there is no unset/reset path
-- a solved address cannot solve again
+- once the count reaches `solveLimit`, additional solves revert when `solveLimit != 0`
 
-This makes the contract behave like a one-time attestation registry.
+This makes the contract behave like a bounded per-address attestation counter.
 
 ### Constructor
 
 The constructor takes:
 
 - `name_`
+- `solveLimit_`
 - `initOwner`
 - `initSolutionSigner`
 - `initPostProofHook`
@@ -85,7 +116,7 @@ Constructor rules:
 The constructor emits:
 
 - `SolutionSignerSet(initSolutionSigner)`
-- `PostProofHookSet(initPostProofHook)` when a nonzero hook is provided
+- `PostProofHookSet(initPostProofHook)`
 
 ### Solve Verification
 
@@ -93,7 +124,7 @@ The `solve(bytes data, bytes signature)` function is the center of the system.
 
 It rejects:
 
-- callers that have already solved
+- callers that have already reached `solveLimit` when a nonzero limit is configured
 - signatures not produced by `solutionSigner`
 - signatures for a different contract
 - signatures for a different chain
@@ -126,13 +157,13 @@ This means a valid signature is only valid for:
 
 The function follows checks-effects-interactions order:
 
-1. verify the caller is unsolved
+1. verify the caller is still allowed to solve
 2. verify the signature
-3. mark the caller as solved
+3. increment the caller's solve count
 4. call the hook if configured
 5. emit `Solved`
 
-The hook call happens after state is updated, but because the whole transaction reverts atomically, a reverting hook causes the entire solve to fail and the solver remains unsolved. This behavior is tested in `test_solveWithRevertingHook`.
+The hook call happens after state is updated, but because the whole transaction reverts atomically, a reverting hook causes the entire solve to fail and the solver's count remains unchanged. This behavior is tested in `test_solveWithRevertingHook`.
 
 That is an important integration detail: a hook is part of the success path.
 
@@ -257,16 +288,16 @@ If you need permissionless proof verification, this design is still the wrong pr
 - Prevents replay across contracts and chains.
 - Prevents users from reusing another user's signature.
 - Prevents post-signing mutation of the `data` payload.
-- Prevents double-solving by the same address.
+- Enforces a per-address solve cap when `solveLimit` is nonzero.
 - Allows optional composition through a hook without complicating the base contract.
 
 ### What the system does not try to do
 
 - It does not verify challenge correctness onchain.
-- It does not support multiple solves per address.
 - It does not support revocation or admin resets.
 - It does not support signature expiries, nonces, or deadlines.
 - It does not support disabling the hook after one has been set through admin.
+- In `solveLimit == 0` mode, it is still bounded by the `uint16` counter ceiling of `65535` solves per address.
 
 ### Operational risks
 
@@ -309,7 +340,7 @@ The base contract does not interpret `data`, so consistency between offchain sig
 
 ### Hook Design
 
-A hook is appropriate when "solved" should trigger more than a boolean registry update.
+A hook is appropriate when a successful solve should trigger more than a counter update.
 
 Examples:
 
@@ -380,13 +411,13 @@ This contract system is a good fit when:
 - a valid solve can be reduced to knowledge of a secret such as a seed phrase
 - or challenge validity is determined offchain by an operator
 - you want a cheap onchain record of successful completion
-- you need one-time solver recognition per address
+- you need bounded repeated solves per address, or one-time recognition with `solveLimit == 1`
 - you may want custom post-solve behavior
 
 It is a poor fit when:
 
 - proof verification must be trustless and onchain
-- users need repeatable completions
+- users need truly unbounded completions per address
 - solves need revocation or expiration
 - admin policies must be fully immutable from day one except for ownership transfer
 
