@@ -80,13 +80,14 @@ So "unlimited" here should be read as "no configurable limit lower than the type
 
 ### State
 
-The main contract stores six pieces of state:
+The main contract stores seven pieces of state:
 
 - `name`: the human-readable identifier of the puzzle/game
 - `solveLimit`: the configured per-address solve cap, where `0` means no explicit admin-configured cap
 - `solutionSigner`: the address allowed to authorize solves
 - `signerLocked`: whether signer rotation has been permanently disabled
 - `postProofHook`: an optional contract called after a successful solve
+- `hookLocked`: whether hook updates have been permanently disabled
 - `solverCounts[address]`: how many successful solves an address has recorded
 
 The state machine is deliberately simple:
@@ -164,9 +165,9 @@ The function follows checks-effects-interactions order:
 4. call the hook if configured
 5. emit `Solved`
 
-The hook call happens after state is updated, but because the whole transaction reverts atomically, a reverting hook causes the entire solve to fail and the solver's count remains unchanged. This behavior is tested in `test_solveWithRevertingHook`.
+The hook call happens after state is updated, but because the whole transaction reverts atomically, a reverting hook causes the entire solve to fail and the solver's count remains unchanged. This is by design. A solve is only successful if both the base `ProofOfSolve` checks and the configured hook complete successfully. This behavior is tested in `test_solveWithRevertingHook`.
 
-That is an important integration detail: a hook is part of the success path.
+That is an important integration detail: a hook is part of the success path, not a best-effort callback.
 
 ## `IPostProofHook`
 
@@ -202,7 +203,7 @@ In practice, a production hook should do at least some of the following:
 
 The contract inherits `Ownable2Step`, so ownership management uses OpenZeppelin's two-step ownership transfer flow.
 
-The owner has three administrative capabilities:
+The owner has four administrative capabilities:
 
 ### `setSolutionSigner(address newSolutionSigner)`
 
@@ -239,10 +240,21 @@ This updates the post-solve hook.
 Restrictions:
 
 - only the owner can call it
-- the new address must be a contract
-- this function does not allow setting the hook back to zero
+- nonzero hook addresses must be deployed contracts
+- it cannot be called after the hook has been locked
 
-That last point matters. The constructor allows deploying with no hook, but once the owner sets a hook through `setPostProofHook`, there is no admin path in this version to disable hooks again by setting `address(0)`. Any future change must point to another deployed contract.
+Setting the hook to `address(0)` disables post-solve hook calls. This is useful if the hook is only needed temporarily, if a hook needs to be paused without replacing it, or if a deployment starts with a hook and later wants to return to counter-only behavior.
+
+### `lockHook()`
+
+This permanently disables future hook updates.
+
+Restrictions:
+
+- only the owner can call it
+- it can only be called once
+
+This is the contract's immutability lever for post-solve side effects. Once locked, the current `postProofHook` value remains fixed forever. If the current value is `address(0)`, the contract permanently has no hook. If the current value is a contract, successful solves permanently call that hook unless the hook itself implements some separate internal disable path.
 
 ## Trust Model
 
@@ -297,7 +309,6 @@ If you need permissionless proof verification, this design is still the wrong pr
 - It does not verify challenge correctness onchain.
 - It does not support revocation or admin resets.
 - It does not support signature expiries, nonces, or deadlines.
-- It does not support disabling the hook after one has been set through admin.
 - In `solveLimit == 0` mode, the number of solves per address is still bounded by the `uint16` counter ceiling of `65535`.
 
 ### Operational risks
@@ -306,6 +317,7 @@ If you need permissionless proof verification, this design is still the wrong pr
 - If the hook is buggy or malicious, valid solves can be blocked by reverting.
 - If the hook trusts unvalidated `data`, it can introduce its own vulnerabilities.
 - If the owner rotates the signer unexpectedly, integrators relying on the previous signer can break.
+- If the owner updates or disables the hook unexpectedly before `lockHook()` is called, downstream post-solve behavior can change.
 
 ## Integration Notes
 
@@ -351,6 +363,10 @@ Examples:
 - notify another contract
 - store richer solve metadata elsewhere
 
+Hooks are also the right place for most restrictive application logic. The base `ProofOfSolve` registry deliberately stays narrow: it checks the caller's solve limit, verifies that the configured signer authorized the exact `(contract, chain, solver, data)` tuple, increments the counter, and then delegates application-specific behavior to the hook. If an integration needs extra constraints such as challenge phases, eligibility checks, inventory limits, reward rules, or downstream contract requirements, those checks should usually live in the hook instead of being added to the registry.
+
+Because hook execution is part of the same transaction, any hook revert reverts the entire `solve` call. This includes intentional reverts from restrictive hook logic and unintentional reverts from bugs, paused downstream systems, exhausted supply, authorization failures, or deprecated external dependencies. Once a hook has been deployed or locked in, the registry does not have a separate way to know whether that hook will accept a particular call. The only reliable way to find out is to execute the transaction or simulate it with the exact current onchain state.
+
 Because the hook is on the critical path, keep it simple. If the post-solve action is failure-prone or depends on external conditions, consider whether it should happen in a separate user action instead.
 
 ## Tests
@@ -360,7 +376,7 @@ The test suite covers the contract's important behavior:
 - constructor validation
 - owner-only admin actions
 - signer rotation and signer locking
-- hook validation
+- hook validation, disabling, and locking
 - replay protection across contract address and chain id
 - solver binding
 - payload binding
