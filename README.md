@@ -94,7 +94,7 @@ The state machine is deliberately simple:
 - an address starts at `solverCounts[address] == 0`
 - a valid call to `solve` increments the count by `1`
 - there is no unset/reset path
-- once the count reaches `solveLimit`, additional solves revert when `solveLimit != 0`
+- once the count reaches `solveLimit`, additional solve attempts revert (when `solveLimit != 0`)
 
 This makes the contract behave like a bounded per-address attestation counter.
 
