@@ -13,7 +13,7 @@ import {IPostProofHook} from "./IPostProofHook.sol";
 /// @author mpeyfuss & skominers/QED
 /** 
  * Expands and builds upon the framework introduced in CROSSHASHES 0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347.
- * 'Proof of Solve' term suggested by Selkie.
+ * `Proof of Solve` term suggested by Selkie.
 */
 contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
