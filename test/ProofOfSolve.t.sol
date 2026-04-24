@@ -2,9 +2,9 @@
 pragma solidity 0.8.30;
 
 import {Test} from "forge-std-1.14.0/Test.sol";
-import {ProofOfSolve, Ownable, MessageHashUtils} from "src/ProofOfSolve.sol";
+import {ProofOfSolve, Ownable, MessageHashUtils, ECDSA} from "src/ProofOfSolve.sol";
+import {RevertHook} from "src/hooks/RevertHook.sol";
 import {Hook} from "./mocks/Hook.sol";
-import {RevertingHook} from "./mocks/RevertingHook.sol";
 
 contract ProofOfSolveTest is Test {
     ProofOfSolve pf;
@@ -120,15 +120,10 @@ contract ProofOfSolveTest is Test {
     }
 
     function test_setPostProofHook() public {
-        // try setting address(0)
+        // try setting address(1)
         vm.expectRevert(ProofOfSolve.InvalidAddress.selector);
         vm.prank(owner);
-        pf.setPostProofHook(address(0));
-
-        // try setting just an eoa
-        vm.expectRevert(ProofOfSolve.InvalidAddress.selector);
-        vm.prank(owner);
-        pf.setPostProofHook(owner);
+        pf.setPostProofHook(address(1));
 
         // set to a contract
         Hook h = new Hook();
@@ -138,6 +133,37 @@ contract ProofOfSolveTest is Test {
         pf.setPostProofHook(address(h));
 
         assertEq(pf.postProofHook(), address(h));
+
+        // set to address(0)
+        vm.prank(owner);
+        pf.setPostProofHook(address(0));
+
+        assertEq(pf.postProofHook(), address(0));
+
+        // lock hook
+        vm.prank(owner);
+        pf.lockHook();
+
+        // try setting again
+        vm.expectRevert(ProofOfSolve.NotAllowed.selector);
+        vm.prank(owner);
+        pf.setPostProofHook(address(h));
+
+    }
+
+    function test_lockHook() public {
+        // lock
+        vm.expectEmit(false, false, false, false);
+        emit ProofOfSolve.HookLocked();
+        vm.prank(owner);
+        pf.lockHook();
+
+        assertTrue(pf.hookLocked());
+
+        // try locking again
+        vm.expectRevert(ProofOfSolve.NotAllowed.selector);
+        vm.prank(owner);
+        pf.lockHook();
     }
 
     function test_solveWithoutHook(address solver, bytes memory data) public {
@@ -145,33 +171,33 @@ contract ProofOfSolveTest is Test {
 
         // invalid validator contract (cross contract replay)
         bytes memory signature = _sign(solver, data, address(this), block.chainid, signerPrivateKey);
-        vm.expectRevert(ProofOfSolve.InvalidSignature.selector);
+        vm.expectRevert(ProofOfSolve.SignerMismatch.selector);
         vm.prank(solver);
         pf.solve(data, signature);
 
         // invalid chain id (cross chain replay)
         signature = _sign(solver, data, address(pf), block.chainid + 1, signerPrivateKey);
-        vm.expectRevert(ProofOfSolve.InvalidSignature.selector);
+        vm.expectRevert(ProofOfSolve.SignerMismatch.selector);
         vm.prank(solver);
         pf.solve(data, signature);
 
         // invalid solver (use someone else's solution)
         signature = _sign(address(0), data, address(pf), block.chainid, signerPrivateKey);
-        vm.expectRevert(ProofOfSolve.InvalidSignature.selector);
+        vm.expectRevert(ProofOfSolve.SignerMismatch.selector);
         vm.prank(solver);
         pf.solve(data, signature);
 
         // sign wrong data
         bytes memory badData = abi.encode(keccak256(data));
         signature = _sign(solver, badData, address(pf), block.chainid, signerPrivateKey);
-        vm.expectRevert(ProofOfSolve.InvalidSignature.selector);
+        vm.expectRevert(ProofOfSolve.SignerMismatch.selector);
         vm.prank(solver);
         pf.solve(data, signature);
 
         // wrong signer pk
         uint256 badSignerKey = uint256(keccak256("bad pk"));
         signature = _sign(solver, data, address(pf), block.chainid, badSignerKey);
-        vm.expectRevert(ProofOfSolve.InvalidSignature.selector);
+        vm.expectRevert(ProofOfSolve.SignerMismatch.selector);
         vm.prank(solver);
         pf.solve(data, signature);
 
@@ -204,6 +230,23 @@ contract ProofOfSolveTest is Test {
         }
     }
 
+    function test_lockSigner_doesNotAffectSolve(address solver, bytes memory data) public {
+        vm.assume(solver != address(0));
+
+        // Locking freezes signer rotation only; it should not disable ordinary solves.
+        vm.prank(owner);
+        pf.lockSigner();
+
+        bytes memory signature = _sign(solver, data, address(pf), block.chainid, signerPrivateKey);
+
+        vm.expectEmit(true, false, false, false);
+        emit ProofOfSolve.Solved(solver, 1);
+        vm.prank(solver);
+        pf.solve(data, signature);
+
+        assertEq(pf.solverCounts(solver), 1);
+    }
+
     function test_solveWithHook(address solver, bytes memory data) public {
         vm.assume(solver != address(0));
 
@@ -226,7 +269,7 @@ contract ProofOfSolveTest is Test {
         vm.assume(solver != address(0));
 
         // set hook
-        RevertingHook h = new RevertingHook();
+        RevertHook h = new RevertHook();
         vm.prank(owner);
         pf.setPostProofHook(address(h));
 
@@ -235,5 +278,37 @@ contract ProofOfSolveTest is Test {
         vm.expectRevert();
         vm.prank(solver);
         pf.solve(data, signature);
+    }
+
+    function test_solve_revertsOnEmptyMalformedSignature(address solver, bytes memory data) public {
+        vm.assume(solver != address(0));
+
+        // Malformed signatures may revert from OZ ECDSA before the contract can raise InvalidSignature.
+        vm.expectRevert(abi.encodeWithSelector(ECDSA.ECDSAInvalidSignatureLength.selector, 0));
+        vm.prank(solver);
+        pf.solve(data, bytes(""));
+    }
+
+    function test_solve_revertsOnShortMalformedSignature(address solver, bytes memory data) public {
+        vm.assume(solver != address(0));
+
+        bytes memory malformed = hex"123456";
+        vm.expectRevert(abi.encodeWithSelector(ECDSA.ECDSAInvalidSignatureLength.selector, 3));
+        vm.prank(solver);
+        pf.solve(data, malformed);
+    }
+
+    function test_solve_revertsOnRandom65ByteGarbageSignature(address solver, bytes memory data) public {
+        vm.assume(solver != address(0));
+
+        // Even when the signature has the right length, random garbage should not validate.
+        bytes memory malformed = new bytes(65);
+        for (uint256 i = 0; i < malformed.length; ++i) {
+            malformed[i] = bytes1(uint8(255 - i));
+        }
+
+        vm.expectRevert(abi.encodeWithSelector(ECDSA.ECDSAInvalidSignatureS.selector, 0xdfdedddcdbdad9d8d7d6d5d4d3d2d1d0cfcecdcccbcac9c8c7c6c5c4c3c2c1c0));
+        vm.prank(solver);
+        pf.solve(data, malformed);
     }
 }
