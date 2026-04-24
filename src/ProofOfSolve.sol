@@ -21,6 +21,7 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     bool public signerLocked;
+    bool public hookLocked;
     address public solutionSigner;
     address public postProofHook;
 
@@ -34,6 +35,7 @@ contract ProofOfSolve is Ownable2Step {
 
     event PostProofHookSet(address indexed hook);
     event SignerLocked();
+    event HookLocked();
     event SolutionSignerSet(address indexed signer);
     event Solved(address indexed solver);
 
@@ -130,15 +132,25 @@ contract ProofOfSolve is Ownable2Step {
     }
 
     /// @notice Updates the hook contract invoked after a successful solve.
-    /// @dev Cannot set to address(0) in this function; that is only possible in the constructor.
-    /// @param newPostProofHook The new hook contract that implements `IPostProofHook`.
+    /// @dev Reverts if hook has been permanently locked.
     function setPostProofHook(address newPostProofHook) external onlyOwner {
         // checks
-        if (newPostProofHook.code.length == 0) revert InvalidAddress();
+        if (hookLocked) revert NotAllowed();
+        if (newPostProofHook != address(0) && newPostProofHook.code.length == 0) revert InvalidAddress();
 
         // effects
         postProofHook = newPostProofHook;
 
         emit PostProofHookSet(newPostProofHook);
+    }
+
+    /// @notice Permanently disables future updates to `postProofHook`.
+    /// @dev This action is irreversible once executed.
+    function lockHook() external onlyOwner {
+        if (hookLocked) revert NotAllowed();
+
+        hookLocked = true;
+
+        emit HookLocked();
     }
 }
