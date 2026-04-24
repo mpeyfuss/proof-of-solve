@@ -53,7 +53,7 @@ contract ProofOfSolve is Ownable2Step {
     /// @param name_ The string identifier for the ProofOfSolve instance, such as the name of a puzzle or game.
     /// @param initOwner The initial owner with permission to update contract configuration.
     /// @param initSolutionSigner The EOA authorized to sign solve payloads for this contract.
-    /// @param initPostProofHook The hook contract called after an address is is marked as having solved.
+    /// @param initPostProofHook The hook contract called after an address is marked as having solved.
     constructor(string memory name_, address initOwner, address initSolutionSigner, address initPostProofHook) Ownable(initOwner) {
         // checks
         if (initSolutionSigner == address(0)) revert InvalidAddress();
