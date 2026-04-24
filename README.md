@@ -125,7 +125,7 @@ The `solve(bytes data, bytes signature)` function is the center of the system.
 
 It rejects:
 
-- callers that have already reached `solveLimit` when a nonzero limit is configured
+- callers that have already reached `solveLimit` (when a nonzero limit is configured)
 - signatures not produced by `solutionSigner`
 - signatures for a different contract
 - signatures for a different chain
