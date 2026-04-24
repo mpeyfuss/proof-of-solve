@@ -412,7 +412,7 @@ This contract system is a good fit when:
 - a valid solve can be reduced to knowledge of a secret such as a seed phrase
 - or challenge validity is determined offchain by an operator
 - you want a cheap onchain record of successful completion
-- you need bounded repeated solves per address, or one-time recognition with `solveLimit == 1`
+- you need to enforce a maximum number of solves per address, such as one-time solver recognition with `solveLimit == 1`; or you are comfortable with solved counts that are effectively unbounded in practical use cases, but still technically bounded by the `uint16` threshold.
 - you may want custom post-solve behavior
 
 It is a poor fit when:
