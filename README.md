@@ -83,7 +83,7 @@ So "unlimited" here should be read as "no configurable limit lower than the type
 The main contract stores six pieces of state:
 
 - `name`: the human-readable identifier of the puzzle/game
-- `solveLimit`: the configured per-address solve cap, where `0` means no explicit cap
+- `solveLimit`: the configured per-address solve cap, where `0` means no explicit admin-configured cap
 - `solutionSigner`: the address allowed to authorize solves
 - `signerLocked`: whether signer rotation has been permanently disabled
 - `postProofHook`: an optional contract called after a successful solve
