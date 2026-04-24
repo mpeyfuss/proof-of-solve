@@ -254,7 +254,7 @@ Restrictions:
 - only the owner can call it
 - it can only be called once
 
-This is the contract's immutability lever for post-solve side effects. Once locked, the current `postProofHook` value remains fixed forever. If the current value is `address(0)`, the contract permanently has no hook. If the current value is a contract, successful solves permanently call that hook unless the hook itself implements some separate internal disable path.
+This is the contract's immutability lever for post-solve side effects. Once locked, the current `postProofHook` value remains fixed forever. If the current value is `address(0)`, then the contract permanently has no hook. If the current value is a contract, successful solves permanently call that hook unless the hook itself implements some separate internal disable path.
 
 ## Trust Model
 
