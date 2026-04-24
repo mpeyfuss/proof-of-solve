@@ -7,9 +7,14 @@ import {ECDSA} from "@openzeppelin-contracts-5.6.1/utils/cryptography/ECDSA.sol"
 import {IPostProofHook} from "./IPostProofHook.sol";
 
 /// @title ProofOfSolve
-/// @notice Records when an address has presented a valid signer-approved proof for a puzzle.
+/// @notice Records when an address has presented a valid signer-approved proof that they know a secret, 
+///         such as the solution to a puzzle.
 /// @dev Optionally calls a configured hook contract after a successful solve.
 /// @author mpeyfuss & skominers/QED
+/** 
+ * Expands and builds upon the framework introduced in CROSSHASHES 0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347.
+ * 'Proof of Solve' term suggested by Selkie.
+*/
 contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
     // STORAGE
@@ -45,10 +50,10 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     /// @notice Deploys the contract and configures the initial signer and post-proof hook.
-    /// @param name_ The string identifier for the puzzle/game.
+    /// @param name_ The string identifier for the ProofOfSolve instance, such as the name of a puzzle or game.
     /// @param initOwner The initial owner with permission to update contract configuration.
     /// @param initSolutionSigner The EOA authorized to sign solve payloads for this contract.
-    /// @param initPostProofHook The hook contract called after a solver is marked as solved.
+    /// @param initPostProofHook The hook contract called after an address is is marked as having solved.
     constructor(string memory name_, address initOwner, address initSolutionSigner, address initPostProofHook) Ownable(initOwner) {
         // checks
         if (initSolutionSigner == address(0)) revert InvalidAddress();
@@ -74,7 +79,8 @@ contract ProofOfSolve is Ownable2Step {
     /// @param data Arbitrary solver-provided data included in the signed payload and
     ///        forwarded to the configured post-proof hook.
     /// @param signature A signature from `solutionSigner` over
-    ///        `keccak256(abi.encode(address(this), block.chainid, msg.sender, data))`.
+    ///        `keccak256(abi.encode(address(this), block.chainid, msg.sender, data))`
+    ///        [constituting the proof of successful solve].
     function solve(bytes calldata data, bytes calldata signature) external {
         // checks
         if (solvers[msg.sender]) revert NotAllowed();
@@ -98,7 +104,7 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     /// @notice Updates the signer authorized to approve solve payloads.
-    /// @dev Reverts if signer updates have been permanently locked.
+    /// @dev Reverts if signer has been permanently locked.
     /// @param newSolutionSigner The new EOA that will be trusted for solve signatures.
     function setSolutionSigner(address newSolutionSigner) external onlyOwner {
         // checks
@@ -124,7 +130,7 @@ contract ProofOfSolve is Ownable2Step {
     }
 
     /// @notice Updates the hook contract invoked after a successful solve.
-    /// @dev Cannot set to address(0) in this function, only possible in the constructor
+    /// @dev Cannot set to address(0) in this function; that is only possible in the constructor.
     /// @param newPostProofHook The new hook contract that implements `IPostProofHook`.
     function setPostProofHook(address newPostProofHook) external onlyOwner {
         // checks
