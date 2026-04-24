@@ -298,7 +298,7 @@ If you need permissionless proof verification, this design is still the wrong pr
 - It does not support revocation or admin resets.
 - It does not support signature expiries, nonces, or deadlines.
 - It does not support disabling the hook after one has been set through admin.
-- In `solveLimit == 0` mode, it is still bounded by the `uint16` counter ceiling of `65535` solves per address.
+- In `solveLimit == 0` mode, the number of solves per address is still bounded by the `uint16` counter ceiling of `65535`.
 
 ### Operational risks
 
