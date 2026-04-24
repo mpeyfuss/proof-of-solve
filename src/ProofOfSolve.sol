@@ -9,7 +9,7 @@ import {IPostProofHook} from "./IPostProofHook.sol";
 /// @title ProofOfSolve
 /// @notice Records when an address has presented a valid signer-approved proof for a puzzle.
 /// @dev Optionally calls a configured hook contract after a successful solve.
-/// @author mpeyfuss & scduko
+/// @author mpeyfuss & skominers/QED
 contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
     // STORAGE
