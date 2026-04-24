@@ -16,12 +16,13 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     bool public signerLocked;
+    uint16 public solveLimit; // 0 means no limit
     address public solutionSigner;
     address public postProofHook;
 
     string public name;
     
-    mapping(address solver => bool) public solvers;
+    mapping(address solver => uint16) public solverCounts;
 
     ////////////////////////////////////////////////////////////////
     // EVENTS
@@ -30,7 +31,7 @@ contract ProofOfSolve is Ownable2Step {
     event PostProofHookSet(address indexed hook);
     event SignerLocked();
     event SolutionSignerSet(address indexed signer);
-    event Solved(address indexed solver);
+    event Solved(address indexed solver, uint16 indexed count);
 
     ////////////////////////////////////////////////////////////////
     // ERRORS
@@ -46,16 +47,18 @@ contract ProofOfSolve is Ownable2Step {
 
     /// @notice Deploys the contract and configures the initial signer and post-proof hook.
     /// @param name_ The string identifier for the puzzle/game.
+    /// @param solveLimit_ The solve limit per solver. 0 means no limit.
     /// @param initOwner The initial owner with permission to update contract configuration.
     /// @param initSolutionSigner The EOA authorized to sign solve payloads for this contract.
     /// @param initPostProofHook The hook contract called after a solver is marked as solved.
-    constructor(string memory name_, address initOwner, address initSolutionSigner, address initPostProofHook) Ownable(initOwner) {
+    constructor(string memory name_, uint16 solveLimit_, address initOwner, address initSolutionSigner, address initPostProofHook) Ownable(initOwner) {
         // checks
         if (initSolutionSigner == address(0)) revert InvalidAddress();
         if (initPostProofHook != address(0) && initPostProofHook.code.length == 0) revert InvalidAddress();
 
         // effects
         name = name_;
+        solveLimit = solveLimit_;
         solutionSigner = initSolutionSigner;
         emit SolutionSignerSet(initSolutionSigner);
 
@@ -77,20 +80,20 @@ contract ProofOfSolve is Ownable2Step {
     ///        `keccak256(abi.encode(address(this), block.chainid, msg.sender, data))`.
     function solve(bytes calldata data, bytes calldata signature) external {
         // checks
-        if (solvers[msg.sender]) revert NotAllowed();
+        if (solveLimit != 0 && solverCounts[msg.sender] == solveLimit) revert NotAllowed();
         bytes32 messageHash = keccak256(abi.encode(address(this), block.chainid, msg.sender, data));
         bytes32 digest = MessageHashUtils.toEthSignedMessageHash(messageHash);
         if (ECDSA.recover(digest, signature) != solutionSigner) revert InvalidSignature();
 
         // effects
-        solvers[msg.sender] = true;
+        uint16 count = ++solverCounts[msg.sender];
 
         // interactions
         if (postProofHook != address(0)) {
             IPostProofHook(postProofHook).hook(msg.sender, data);
         }
 
-        emit Solved(msg.sender);
+        emit Solved(msg.sender, count);
     }
 
     ////////////////////////////////////////////////////////////////
