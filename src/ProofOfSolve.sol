@@ -26,7 +26,6 @@ contract ProofOfSolve is Ownable2Step {
     string public name;
     
     mapping(address solver => uint16) public solverCounts;
-    mapping(bytes32 messagehash => bool) private _messageHashUsed;
 
     ////////////////////////////////////////////////////////////////
     // EVENTS
@@ -51,7 +50,7 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     /// @notice Deploys the contract and configures the initial signer and post-proof hook.
-    /// @param name_ The string identifier for the Proof of Solve instance, such as the name of a puzzle or game.
+    /// @param name_ The string identifier for the ProofOfSolve instance, such as the name of a puzzle or game.
     /// @param solveLimit_ The solve limit per solver. 0 means no limit.
     /// @param initOwner The initial owner with permission to update contract configuration.
     /// @param initSolutionSigner The EOA authorized to sign solve payloads for this contract.
@@ -93,7 +92,6 @@ contract ProofOfSolve is Ownable2Step {
 
         // effects
         uint16 count = ++solverCounts[msg.sender];
-        _messageHashUsed[messageHash] = true;
 
         // interactions
         if (postProofHook != address(0)) {
@@ -108,7 +106,7 @@ contract ProofOfSolve is Ownable2Step {
     ////////////////////////////////////////////////////////////////
 
     /// @notice Updates the signer authorized to approve solve payloads.
-    /// @dev Reverts if signer has been permanently locked.
+    /// @dev Reverts if signer has been locked.
     /// @param newSolutionSigner The new EOA that will be trusted for solve signatures.
     function setSolutionSigner(address newSolutionSigner) external onlyOwner {
         // checks

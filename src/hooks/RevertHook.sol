@@ -7,7 +7,7 @@ contract RevertHook is IPostProofHook {
 
     /// @inheritdoc IPostProofHook
     function hook(address /*solver*/, bytes calldata /*data*/) external pure {
-        revert("nah");
+        revert("closed");
     }
     
 }
