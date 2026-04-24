@@ -53,7 +53,7 @@ The important consequence is that the user does not submit a proof that the cont
 
 - `solverCounts[address]` stores how many successful solves that address has recorded
 - `solveLimit` is the maximum number of successful solves each address is allowed to accumulate
-- `solveLimit == 0` means "no explicit admin-configured cap"
+- `solveLimit == 0` is a sentinel value meaning "no explicit admin-configured cap [at the smart contract level]"
 
 The limit check happens before incrementing:
 
