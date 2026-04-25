@@ -1,6 +1,6 @@
 # Proof Of Solve
 
-`ProofOfSolve` is a verification protocol for recording when a user (as represented by an address) has successfully solved a puzzle-style challenge. This was originally concepted in [Scott Duke Kominers](https://scottkom.com/)'s [CROSSHASHES](https://etherscan.io/address/0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347f) project and expanded upon in this repository. Credit to [Selkie](https://x.com/madam_selkie) for the name `Proof of Solve`.
+`ProofOfSolve` is a verification protocol for recording when a user (as represented by an address) has successfully solved a puzzle-style challenge. This was originally concepted in [Scott Duke Kominers](https://scottkom.com/)'s [CROSSHASHES](https://etherscan.io/address/0x6570ba3cb863dd2e634f4d0ce1cbe9f8957b347f) project and expanded upon in this repository. Credit to [Selkie](https://x.com/madam_selkie) for the name "Proof of Solve."
 
 The repo contains one primary contract, one hook interface, and a test suite around the expected behaviors:
 
