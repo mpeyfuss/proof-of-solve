@@ -8,7 +8,7 @@ The repo contains one primary contract, one hook interface, and a test suite aro
 - `src/IPostProofHook.sol`
 - `test/ProofOfSolve.t.sol`
 
-The original impetus for the contract was systems a puzzle solution comprises or reveals a secret that only a real solver should be able to obtain. In that mode, knowing the secret automatically implies correctness of the solution, and so the signer can safely sign for anyone who demonstrates knowledge of the secret---the secret itself is the actual proof of solve. This framework applies, to the following example use case:
+The original impetus for the contract was systems in which a puzzle solution comprises or reveals a secret that only a real solver should be able to obtain. In that mode, knowing the secret automatically implies correctness of the solution, and so the signer can safely sign for anyone who demonstrates knowledge of the secret---the secret itself is the actual proof of solve. This framework applies to the following example use case:
 > A cryptic puzzle is shared with prospective solvers. The secret is the answer to the puzzle, which itself is a word or phrase. When a user solves the puzzle, they learn the answer, which comprises the secret; they can then activate the `ProofOfSolve` signer.
 
 The same contract shape also generalizes into a broader trusted-signer system. In that mode, the contract does not verify puzzle solutions onchain. Instead, it verifies that a configured signer approved a specific solver and a specific payload for a specific contract on a specific chain, then increments that solver's recorded solve count.
@@ -28,7 +28,7 @@ That split is the main design choice:
 - the actual proof of solve can either be a revealed secret or an operator decision
 - authorization to record that solution happens via ECDSA signature
 - durable onchain state is "how many times has this address solved?"
-- post-solve side effects are modularized behind a hook
+- post-solve effects are modularized behind a hook
 
 This keeps the base contract simple and makes it usable across very different challenge systems.
 
@@ -68,7 +68,7 @@ That means:
 - if `solveLimit == N`, each address can solve successfully `N` times
 - each successful call emits the new cumulative count in `Solved(solver, count)`
 
-One implementation detail matters for integrators: both `solveLimit` and `solverCounts` are `uint16`.
+One implementation detail matters for integrators: both `solveLimit` and `solverCounts` are `uint16`. Thus
 
 - the largest representable count is `65,535`
 - when `solveLimit` is nonzero, that type choice is usually fine because the configured cap is also `uint16`
@@ -167,7 +167,7 @@ The function follows checks-effects-interactions order:
 
 The hook call happens after state is updated, but because the whole transaction reverts atomically, a reverting hook causes the entire solve to fail and the solver's count remains unchanged. This is by design. A solve is only successful if both the base `ProofOfSolve` checks and the configured hook complete successfully. This behavior is tested in `test_solveWithRevertingHook`.
 
-That is an important integration detail: a hook is part of the success path, not a best-effort callback.
+That is an important integration detail: _a hook is part of the success path, not a best-effort callback._
 
 ## `IPostProofHook`
 
