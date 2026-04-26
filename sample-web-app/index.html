@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof Of Solve Web App</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f7f9;
+            --panel: #ffffff;
+            --ink: #171a1f;
+            --muted: #5e6878;
+            --line: #dce1e8;
+            --accent: #1467d9;
+            --accent-strong: #0f54b5;
+            --danger: #a92626;
+            --ok: #12663a;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--ink);
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        main {
+            width: min(960px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 40px 0;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: clamp(2rem, 5vw, 3.2rem);
+            line-height: 1;
+            letter-spacing: 0;
+        }
+
+        p {
+            margin: 0;
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        form,
+        .output {
+            margin-top: 24px;
+            padding: 24px;
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+        }
+
+        fieldset {
+            margin: 0;
+            padding: 0;
+            border: 0;
+        }
+
+        legend {
+            padding: 0;
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .fieldset-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .seed-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        label {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 0.82rem;
+            font-weight: 650;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--ink);
+            font: inherit;
+        }
+
+        input {
+            height: 44px;
+            padding: 0 12px;
+        }
+
+        textarea {
+            min-height: 92px;
+            padding: 12px;
+            resize: vertical;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.86rem;
+            line-height: 1.45;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+            border-color: var(--accent);
+        }
+
+        .stack {
+            display: grid;
+            gap: 18px;
+        }
+
+        .wallet-row {
+            margin-top: 20px;
+        }
+
+        .config-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .full {
+            grid-column: 1 / -1;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px;
+            margin-top: 22px;
+        }
+
+        button {
+            min-height: 44px;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            padding: 0 16px;
+            background: var(--accent);
+            color: #fff;
+            font: inherit;
+            font-weight: 750;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: var(--accent-strong);
+        }
+
+        button.secondary {
+            min-height: 36px;
+            background: #fff;
+            color: var(--ink);
+            border-color: var(--line);
+        }
+
+        button.secondary:hover {
+            background: #f0f3f7;
+        }
+
+        .status {
+            min-height: 24px;
+            font-weight: 650;
+        }
+
+        .status.error {
+            color: var(--danger);
+        }
+
+        .status.success {
+            color: var(--ok);
+        }
+
+        .output {
+            display: none;
+        }
+
+        .output.visible {
+            display: block;
+        }
+
+        .output h2 {
+            margin: 0 0 16px;
+            font-size: 1.2rem;
+        }
+
+        .output-item {
+            display: grid;
+            gap: 8px;
+        }
+
+        .output-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        @media (max-width: 760px) {
+            main {
+                width: min(100% - 24px, 960px);
+                padding: 24px 0;
+            }
+
+            form,
+            .output {
+                padding: 18px;
+            }
+
+            .seed-grid,
+            .config-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 460px) {
+
+            .seed-grid,
+            .config-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+    <script type="module">
+        import {
+            encodeAbiParameters,
+            encodeFunctionData,
+            isAddress,
+            keccak256
+        } from 'https://esm.sh/viem@2.38.5';
+        import { mnemonicToAccount } from 'https://esm.sh/viem@2.38.5/accounts';
+
+        const proofOfSolveConfig = {
+            chainId: 1,
+            verifyingContract: "",
+            data: "0x"
+        };
+
+        const solveAbi = [{
+            type: 'function',
+            name: 'solve',
+            stateMutability: 'nonpayable',
+            inputs: [
+                { name: 'data', type: 'bytes' },
+                { name: 'signature', type: 'bytes' }
+            ],
+            outputs: []
+        }];
+
+        const $ = (selector) => document.querySelector(selector);
+        const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+        const setStatus = (message, kind = '') => {
+            const status = $('#status');
+            status.textContent = message;
+            status.className = kind ? `status ${kind}` : 'status';
+        };
+
+        const normalizeHex = (value) => value.trim();
+
+        const validateHexBytes = (value, label) => {
+            const normalized = normalizeHex(value);
+            if (!/^0x([0-9a-fA-F]{2})*$/.test(normalized)) {
+                throw new Error(`${label} must be 0x-prefixed hex bytes with an even number of hex characters.`);
+            }
+            return normalized;
+        };
+
+        const getMnemonic = () => {
+            const words = $$('.seed-word').map((input) => input.value.trim().toLowerCase());
+            const missing = words.findIndex((word) => word.length === 0);
+            if (missing !== -1) {
+                throw new Error(`Enter seed phrase word ${missing + 1}.`);
+            }
+            return words.join(' ');
+        };
+
+        const writeOutput = ({ signerAddress, messageHash, signature, callData, data }) => {
+            $('#signerAddress').value = signerAddress;
+            $('#messageHash').value = messageHash;
+            $('#solveData').value = data;
+            $('#signature').value = signature;
+            $('#callData').value = callData;
+            $('#output').classList.add('visible');
+        };
+
+        const signSolve = async () => {
+            const chainIdInput = $('#chainId').value.trim();
+            const chainId = BigInt(chainIdInput || proofOfSolveConfig.chainId);
+            const verifyingContract = $('#verifyingContract').value.trim();
+            const solver = $('#walletAddress').value.trim();
+            const data = validateHexBytes($('#data').value, 'Data');
+
+            if (!isAddress(verifyingContract)) {
+                throw new Error('Enter a valid ProofOfSolve contract address.');
+            }
+
+            if (!isAddress(solver)) {
+                throw new Error('Enter a valid wallet address.');
+            }
+
+            if (chainId <= 0n) {
+                throw new Error('Chain ID must be greater than zero.');
+            }
+
+            const account = mnemonicToAccount(getMnemonic());
+            const messageHash = keccak256(encodeAbiParameters(
+                [
+                    { type: 'address' },
+                    { type: 'uint256' },
+                    { type: 'address' },
+                    { type: 'bytes' }
+                ],
+                [verifyingContract, chainId, solver, data]
+            ));
+            const signature = await account.signMessage({ message: { raw: messageHash } });
+            const callData = encodeFunctionData({
+                abi: solveAbi,
+                functionName: 'solve',
+                args: [data, signature]
+            });
+
+            writeOutput({
+                signerAddress: account.address,
+                messageHash,
+                signature,
+                callData,
+                data
+            });
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            $('#chainId').value = String(proofOfSolveConfig.chainId ?? '');
+            $('#verifyingContract').value = proofOfSolveConfig.verifyingContract ?? '';
+            $('#data').value = proofOfSolveConfig.data ?? '0x';
+
+            $('#toggleSeedVisibility').addEventListener('click', () => {
+                const shouldReveal = $('#toggleSeedVisibility').getAttribute('aria-pressed') !== 'true';
+                $$('.seed-word').forEach((input) => {
+                    input.type = shouldReveal ? 'text' : 'password';
+                });
+                $('#toggleSeedVisibility').setAttribute('aria-pressed', String(shouldReveal));
+                $('#toggleSeedVisibility').textContent = shouldReveal ? 'Hide' : 'Reveal';
+            });
+
+            $('#solveForm').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                setStatus('');
+
+                try {
+                    await signSolve();
+                    setStatus('Signature ready to copy.', 'success');
+                } catch (error) {
+                    $('#output').classList.remove('visible');
+                    setStatus(error instanceof Error ? error.message : 'Unable to create signature.', 'error');
+                }
+            });
+
+            document.addEventListener('click', async (event) => {
+                const button = event.target.closest('[data-copy-target]');
+                if (!button) return;
+
+                const target = $(button.dataset.copyTarget);
+                await navigator.clipboard.writeText(target.value);
+                const previous = button.textContent;
+                button.textContent = 'Copied';
+                window.setTimeout(() => {
+                    button.textContent = previous;
+                }, 900);
+            });
+        });
+    </script>
+</head>
+
+<body>
+    <main>
+        <h1>Proof Of Solve</h1>
+        <p>Generates signature payload to provide to the ProofOfSolve contract.</p>
+        <form id="solveForm" autocomplete="off">
+            <fieldset>
+                <div class="fieldset-head">
+                    <legend>Signer seed phrase</legend>
+                    <button id="toggleSeedVisibility" class="secondary" type="button"
+                        aria-pressed="false">Reveal</button>
+                </div>
+                <div class="seed-grid">
+                    <label>Word 1<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 2<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 3<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 4<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 5<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 6<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 7<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 8<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 9<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 10<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 11<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                    <label>Word 12<input class="seed-word" type="password" inputmode="text" autocomplete="off"></label>
+                </div>
+            </fieldset>
+
+            <div class="wallet-row">
+                <label>Your wallet address
+                    <input id="walletAddress" type="text" inputmode="text" autocomplete="off" placeholder="0x...">
+                </label>
+            </div>
+
+            <div class="config-grid">
+                <label>Chain ID
+                    <input id="chainId" type="number" min="1" step="1" inputmode="numeric">
+                </label>
+                <label>ProofOfSolve contract
+                    <input id="verifyingContract" type="text" inputmode="text" autocomplete="off" placeholder="0x...">
+                </label>
+                <label class="full">Data bytes
+                    <input id="data" type="text" inputmode="text" autocomplete="off" placeholder="0x">
+                </label>
+            </div>
+
+            <div class="actions">
+                <button type="submit">Sign Solve Payload</button>
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+            </div>
+        </form>
+
+        <section id="output" class="output" aria-live="polite">
+            <h2>Copy output</h2>
+            <div class="stack">
+                <label class="output-item">
+                    <span class="output-head">Signer address <button class="secondary" type="button"
+                            data-copy-target="#signerAddress">Copy</button></span>
+                    <textarea id="signerAddress" readonly></textarea>
+                </label>
+                <label class="output-item">
+                    <span class="output-head">Message hash <button class="secondary" type="button"
+                            data-copy-target="#messageHash">Copy</button></span>
+                    <textarea id="messageHash" readonly></textarea>
+                </label>
+                <label class="output-item">
+                    <span class="output-head">Data <button class="secondary" type="button"
+                            data-copy-target="#solveData">Copy</button></span>
+                    <textarea id="solveData" readonly></textarea>
+                </label>
+                <label class="output-item">
+                    <span class="output-head">Signature <button class="secondary" type="button"
+                            data-copy-target="#signature">Copy</button></span>
+                    <textarea id="signature" readonly></textarea>
+                </label>
+                <label class="output-item">
+                    <span class="output-head">Encoded solve calldata <button class="secondary" type="button"
+                            data-copy-target="#callData">Copy</button></span>
+                    <textarea id="callData" readonly></textarea>
+                </label>
+            </div>
+        </section>
+    </main>
+</body>
+
+</html>
